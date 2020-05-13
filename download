@@ -1,0 +1,238 @@
+#!/usr/bin/env python3
+#
+# Copyright (C) 2020 Chris Lamb <chris@chris-lamb.co.uk>
+
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+import os
+import re
+import sys
+import glob
+import shutil
+import logging
+import daiquiri
+import tempfile
+import datetime
+import requests
+import subprocess
+import collections
+
+from xml.etree import ElementTree
+
+
+re_title = re.compile("Book (?P<book>\d+), Chapter (?P<chapter>\d+)")
+re_filename = re.compile(
+    r"^\s*(?P<index>\d+)\|(?P<filename>\./[^/]+/Book (?P<book>\d+)[^/]+/Chapter (?P<chapter>\d+).*\.mp3)"
+)
+
+daiquiri.setup(level=logging.INFO)
+log = daiquiri.getLogger(__name__)
+
+HASH = "BBD677D39EFBC45CE255664219DEDB2D596598EF".lower()
+TORRENT = f"{HASH}.torrent"
+
+MAGNET = f"magnet:?xt=urn:btih:{HASH}&dn=Harry%20Potter%20Audio%20Books%201-7%3B%20Read%20by%20Jim%20Dale%20%5BMP3%5D&tr=udp%3A%2F%2Ftracker.coppersurfer.tk%3A6969%2Fannounce&tr=udp%3A%2F%2F9.rarbg.to%3A2920%2Fannounce&tr=udp%3A%2F%2Ftracker.opentrackr.org%3A1337&tr=udp%3A%2F%2Ftracker.internetwarriors.net%3A1337%2Fannounce&tr=udp%3A%2F%2Ftracker.leechers-paradise.org%3A6969%2Fannounce&tr=udp%3A%2F%2Ftracker.coppersurfer.tk%3A6969%2Fannounce&tr=udp%3A%2F%2Ftracker.pirateparty.gr%3A6969%2Fannounce&tr=udp%3A%2F%2Ftracker.cyberia.is%3A6969%2Fannounce"
+
+FEED_URL = "http://feeds.harrypottersacredtext.com/harrypottersacredtext"
+
+
+def get_feed():
+    log.info(f"Dowloading {FEED_URL}")
+
+    r = requests.get(FEED_URL)
+    r.raise_for_status()
+    tree = ElementTree.fromstring(r.content)
+
+    items = collections.defaultdict(dict)
+    for item in tree.iter("item"):
+        title = item.find("title").text
+        enclosure = item.find("enclosure")
+
+        m = re_title.search(title)
+        if m is None:
+            continue
+
+        book = int(m.group("book"))
+        chapter = int(m.group("chapter"))
+
+        items[book][chapter] = {
+            "url": enclosure.attrib["url"],
+            "type": enclosure.attrib["type"],
+            "title": title,
+            "length": enclosure.attrib["length"],
+            "pubDate": item.find("pubDate").text,
+        }
+
+    return items
+
+
+items = get_feed()
+
+
+def download_episode(book, chapter, target):
+    if os.path.exists(target):
+        return
+
+    url = items[book][chapter]["url"]
+
+    log.info(f"Dowloading {url} to {target}")
+
+    with open(target, "wb") as f:
+        for x in requests.get(url).iter_content(chunk_size=1024):
+            f.write(x)
+
+
+def download_chapter(book, chapter, target):
+    if os.path.exists(target):
+        return
+
+    log.info(f"Going to download book {book}, chapter {chapter}")
+
+    if not os.path.exists(TORRENT):
+        log.info(f"Downloading metadata to {TORRENT}")
+        subprocess.check_call(
+            ("aria2c", "--bt-metadata-only=true", "--bt-save-metadata=true", MAGNET,)
+        )
+
+    log.info(f"Parsing {TORRENT}")
+    output = subprocess.check_output(("aria2c", "--show-files", TORRENT,)).decode(
+        "utf-8"
+    )
+
+    # Book -> Chapter -> "index number" into .torrent
+    indexes = collections.defaultdict(dict)
+    for x in output.splitlines():
+        m = re_filename.match(x)
+        if m is None:
+            continue
+
+        book_ = int(m.group("book"))
+        chapter_ = int(m.group("chapter"))
+
+        indexes[book_][chapter_] = {
+            "index": int(m.group("index")),
+            "filename": m.group("filename"),
+        }
+
+    index = indexes[book][chapter]["index"]
+    filename = indexes[book][chapter]["filename"]
+
+    log.info(f"Going to download {filename} in index {index}")
+
+    with tempfile.TemporaryDirectory() as tempdir:
+        log.info(f"Performing the main download under {tempdir}")
+
+        subprocess.check_call(
+            (
+                "aria2c",
+                f"--dir={tempdir}",
+                "--seed-time=0",
+                f"--select-file={index}",
+                TORRENT,
+            )
+        )
+
+        # In multi file torrent, the adjacent files specified by this option may
+        # also be downloaded. This is by design, not a bug. A single piece may
+        # include several files or part of files, and aria2 writes the piece to the
+        # appropriate files.
+        #
+        # <https://aria2.github.io/manual/en/html/aria2c.html#cmdoption-select-file>
+        needle = f"{tempdir}/{filename[2:]}"
+        log.info(f"Looking for {needle} under {tempdir}")
+        for candidate in glob.glob(f"{tempdir}/**/*.mp3", recursive=True):
+            log.info(f"Found {candidate}")
+
+            if needle == candidate:
+                log.info(f"Found {filename} at {candidate}")
+                break
+        else:
+            log.error(f"Could not find {filename} under {tempdir}; exiting")
+            sys.exit(2)
+
+        log.info(f"Saving file to {target}")
+        shutil.move(candidate, target)
+
+
+def concat_files(target, files):
+    if os.path.exists(target):
+        return
+
+    log.info(f"Generating {target} from {files}")
+    filenames = "|".join(files)
+    subprocess.check_call(
+        ("ffmpeg", "-y", "-i", f"concat:{filenames}", "-acodec", "copy", target)
+    )
+
+
+def get_filename(prefix, book, chapter):
+    os.makedirs(prefix, exist_ok=True)
+
+    return f"{prefix}/harry_potter_book_{book:02d}_chapter_{chapter:02d}.mp3"
+
+
+def main(base_url, target):
+    latest = []
+    for book in reversed(sorted(items)):
+        for chapter in reversed(sorted(items[book])):
+            latest.append((book, chapter))
+
+    def add_sub_element(parent, name, text=None):
+        elem = ElementTree.SubElement(parent, name)
+        if text is not None:
+            elem.text = text
+        return elem
+
+    rss = ElementTree.Element("rss")
+    channel = add_sub_element(rss, "channel")
+
+    date = datetime.datetime.utcnow().strftime("%a, %d %b %Y %T %z")
+    title = "Harry Potter and The Sacred Text (with Jim Dale)"
+    add_sub_element(channel, "title", title)
+    add_sub_element(channel, "description", title)
+    add_sub_element(channel, "link", base_url)
+    add_sub_element(channel, "pubDate", date)
+    add_sub_element(channel, "lastBuildDate", date)
+
+    for book, chapter in latest[:5]:
+        data = items[book][chapter]
+
+        chapter_filename = get_filename("chapters", book, chapter)
+        download_chapter(book, chapter, chapter_filename)
+
+        episode_filename = get_filename("episodes", book, chapter)
+        download_episode(book, chapter, episode_filename)
+
+        concatenated_filename = get_filename("concatenated", book, chapter)
+        concat_files(concatenated_filename, (chapter_filename, episode_filename))
+
+        item = add_sub_element(channel, "item")
+        add_sub_element(item, "title", f"Book {book}, Chapter {chapter}")
+        add_sub_element(item, "pubDate", data["pubDate"])
+
+        enclosure = add_sub_element(item, "enclosure")
+        enclosure.attrib[
+            "url"
+        ] = f'{base_url}{get_filename("concatenated", book, chapter)}'
+        enclosure.attrib["type"] = data["type"]
+        enclosure.attrib["length"] = data["length"]
+
+    log.info(f"Writing RSS to {target} to appear at {base_url}{target}")
+
+    with open(target, "w") as f:
+        print(ElementTree.tostring(rss).decode("utf-8"), file=f)
+
+
+if __name__ == "__main__":
+    main(*sys.argv[1:])
