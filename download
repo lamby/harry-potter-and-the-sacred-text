@@ -128,7 +128,7 @@ def download_chapter(book, chapter, target):
     index = indexes[book][chapter]["index"]
     filename = indexes[book][chapter]["filename"]
 
-    log.info(f"Going to download {filename} in index {index}")
+    log.info(f"Going to download {filename} at index {index}")
 
     with tempfile.TemporaryDirectory() as tempdir:
         log.info(f"Performing the main download under {tempdir}")
