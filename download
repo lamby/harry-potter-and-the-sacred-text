@@ -70,7 +70,6 @@ def get_feed():
             "url": enclosure.attrib["url"],
             "type": enclosure.attrib["type"],
             "title": title,
-            "length": enclosure.attrib["length"],
             "pubDate": item.find("pubDate").text,
         }
 
@@ -199,6 +198,23 @@ def get_filename(prefix, book, chapter):
     return f"{prefix}/harry_potter_book_{book:02d}_chapter_{chapter:02d}.mp3"
 
 
+def get_length(filename):
+    output = subprocess.check_output(
+            (
+                "ffprobe",
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
+                filename,
+            )
+        )
+
+    return int(float(output.decode("utf-8").strip()))
+
+
 def main(base_url, target):
     latest = []
     for book in reversed(sorted(items)):
@@ -243,7 +259,7 @@ def main(base_url, target):
             "url"
         ] = f'{base_url}{get_filename("concatenated", book, chapter)}'
         enclosure.attrib["type"] = data["type"]
-        enclosure.attrib["length"] = data["length"]
+        enclosure.attrib["length"] = str(get_length(concatenated_filename))
 
     log.info(f"Writing RSS to {target} to appear at {base_url}{target}")
 
