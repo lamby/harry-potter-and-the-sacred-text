@@ -169,10 +169,27 @@ def concat_files(target, files):
     if os.path.exists(target):
         return
 
-    log.info(f"Generating {target} from {files}")
+    log.info(f"Generating {target} from {' '.join(files)}")
     filenames = "|".join(files)
     subprocess.check_call(
-        ("ffmpeg", "-y", "-i", f"concat:{filenames}", "-acodec", "copy", target)
+        (
+            "ffmpeg",
+            "-hide_banner",
+            "-loglevel",
+            "panic",
+            "-y",
+            "-i",
+            f"concat:{filenames}",
+            "-ac",
+            "2",
+            "-ar",
+            "44100",
+            "-c:a",
+            "libmp3lame",
+            "-qscale:a",
+            "5",
+            target,
+        )
     )
 
 
