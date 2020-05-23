@@ -164,7 +164,7 @@ def download_chapter(book, chapter, target):
         shutil.move(candidate, target)
 
 
-def concat_files(target, files):
+def concat_files(target, files, silence=10):
     if os.path.exists(target):
         return
 
@@ -187,6 +187,8 @@ def concat_files(target, files):
             "libmp3lame",
             "-qscale:a",
             "5",
+            "-af",
+            f"apad=pad_dur={silence}",
             target,
         )
     )
