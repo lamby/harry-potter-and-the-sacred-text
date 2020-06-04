@@ -48,7 +48,7 @@ FEED_URL = "http://feeds.harrypottersacredtext.com/harrypottersacredtext"
 
 
 def get_feed():
-    log.info(f"Dowloading {FEED_URL}")
+    log.info(f"Downloading {FEED_URL}")
 
     r = requests.get(FEED_URL)
     r.raise_for_status()
@@ -85,7 +85,7 @@ def download_episode(book, chapter, target):
 
     url = items[book][chapter]["url"]
 
-    log.info(f"Dowloading {url} to {target}")
+    log.info(f"Downloading {url} to {target}")
 
     with open(target, "wb") as f:
         for x in requests.get(url).iter_content(chunk_size=1024):
