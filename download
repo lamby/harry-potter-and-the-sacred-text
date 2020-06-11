@@ -240,6 +240,11 @@ def main(base_url, target):
     add_sub_element(channel, "pubDate", date)
     add_sub_element(channel, "lastBuildDate", date)
 
+    image = add_sub_element(channel, "image")
+    add_sub_element(image, "url", f"{base_url}image.jpg")
+    add_sub_element(image, "title", title)
+    add_sub_element(image, "link", base_url)
+
     for book, chapter in latest[:5]:
         data = items[book][chapter]
 
