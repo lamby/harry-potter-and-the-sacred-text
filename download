@@ -189,6 +189,8 @@ def concat_files(target, files, silence=10):
             "5",
             "-af",
             f"apad=pad_dur={silence}",
+            "-filter:a",
+            "loudnorm",
             target,
         )
     )
