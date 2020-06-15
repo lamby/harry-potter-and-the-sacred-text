@@ -31,7 +31,7 @@ import collections
 from xml.etree import ElementTree
 
 
-re_title = re.compile("Book (?P<book>\d+), Chapter (?P<chapter>\d+)")
+re_title = re.compile(r"Book (?P<book>\d+), Chapter (?P<chapter>\d+)")
 re_filename = re.compile(
     r"^\s*(?P<index>\d+)\|(?P<filename>\./[^/]+/Book (?P<book>\d+)[^/]+/Chapter (?P<chapter>\d+).*\.mp3)"
 )
