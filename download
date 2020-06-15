@@ -202,17 +202,17 @@ def get_filename(prefix, book, chapter):
 
 def get_length(filename):
     output = subprocess.check_output(
-            (
-                "ffprobe",
-                "-v",
-                "error",
-                "-show_entries",
-                "format=duration",
-                "-of",
-                "default=noprint_wrappers=1:nokey=1",
-                filename,
-            )
+        (
+            "ffprobe",
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
+            filename,
         )
+    )
 
     return int(float(output.decode("utf-8").strip()))
 
