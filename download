@@ -290,9 +290,8 @@ def main(base_url, target):
         add_sub_element(item, "pubDate", data["pubDate"])
 
         enclosure = add_sub_element(item, "enclosure")
-        enclosure.attrib[
-            "url"
-        ] = f'{base_url}{get_filename("concatenated", book, chapter)}'
+        url = get_filename("concatenated", book, chapter)
+        enclosure.attrib["url"] = f"{base_url}{url}"
         enclosure.attrib["type"] = data["type"]
         enclosure.attrib["length"] = str(get_length(concatenated_filename))
 
