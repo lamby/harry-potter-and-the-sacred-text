@@ -92,6 +92,19 @@ def download_episode(book, chapter, target):
             f.write(x)
 
 
+def download_silence(target):
+    if os.path.exists(target):
+        return
+
+    url = "https://raw.githubusercontent.com/anars/blank-audio/master/10-seconds-of-silence.mp3"
+
+    log.info(f"Downloading {url} to {target}")
+
+    with open(target, "wb") as f:
+        for x in requests.get(url).iter_content(chunk_size=1024):
+            f.write(x)
+
+
 def download_chapter(book, chapter, target):
     if os.path.exists(target):
         return
@@ -187,8 +200,6 @@ def concat_files(target, files, silence=10):
             "libmp3lame",
             "-qscale:a",
             "5",
-            "-af",
-            f"apad=pad_dur={silence}",
             "-filter:a",
             "loudnorm",
             target,
@@ -257,7 +268,10 @@ def main(base_url, target):
         download_episode(book, chapter, episode_filename)
 
         concatenated_filename = get_filename("concatenated", book, chapter)
-        concat_files(concatenated_filename, (chapter_filename, episode_filename))
+        download_silence("silence.mp3")
+        concat_files(
+            concatenated_filename, (chapter_filename, "silence.mp3", episode_filename)
+        )
 
         item = add_sub_element(channel, "item")
         add_sub_element(item, "title", f"Book {book}, Chapter {chapter}")
