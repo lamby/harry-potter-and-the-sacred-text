@@ -85,11 +85,25 @@ def download_episode(book, chapter, target):
 
     url = items[book][chapter]["url"]
 
-    log.info(f"Downloading {url} to {target}")
-
-    with open(target, "wb") as f:
+    with tempfile.NamedTemporaryFile(suffix=".mp3") as f:
+        log.info(f"Downloading {url} to {f.name}")
         for x in requests.get(url).iter_content(chunk_size=1024):
             f.write(x)
+
+        log.info(f"Normalising volume and saving to {target}")
+        subprocess.check_call(
+            (
+                "ffmpeg",
+                "-loglevel",
+                "warning",
+                "-y",
+                "-i",
+                f.name,
+                "-filter:a",
+                "volume=0.65",
+                target,
+            )
+        )
 
 
 def download_silence(target):
@@ -200,8 +214,6 @@ def concat_files(target, files, silence=10):
             "libmp3lame",
             "-qscale:a",
             "5",
-            "-filter:a",
-            "loudnorm",
             target,
         )
     )
