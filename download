@@ -100,7 +100,7 @@ def download_episode(book, chapter, target):
                 "-i",
                 f.name,
                 "-filter:a",
-                "volume=0.65",
+                "volume=0.60",
                 target,
             )
         )
