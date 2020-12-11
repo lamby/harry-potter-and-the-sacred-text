@@ -90,6 +90,9 @@ def download_episode(book, chapter, target):
         for x in requests.get(url).iter_content(chunk_size=1024):
             f.write(x)
 
+        # Ensure downloaded file is at least 1MB
+        assert os.path.getsize(f.name) >= 2 ** 20
+
         log.info(f"Normalising volume and saving to {target}")
         subprocess.check_call(
             (
@@ -186,6 +189,9 @@ def download_chapter(book, chapter, target):
         else:
             log.error(f"Could not find {filename} under {tempdir}; exiting")
             sys.exit(2)
+
+        # Ensure downloaded file is at least 1MB
+        assert os.path.getsize(candidate) >= 2 ** 20
 
         log.info(f"Saving file to {target}")
         shutil.move(candidate, target)
